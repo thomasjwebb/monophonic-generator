@@ -30,34 +30,50 @@ To this end, I split the data into a training set and a test set, and score base
 ## II. Analysis
 
 ### Data Exploration
-In this section, you will be expected to analyze the data you are using for the problem. This data can either be in the form of a dataset (or datasets), input data (or input files), or even an environment. The type of data should be thoroughly described and, if possible, have basic statistics and information presented (such as discussion of input features or defining characteristics about the input or environment). Any abnormalities or interesting qualities about the data that may need to be addressed have been identified (such as features that need to be transformed or the possibility of outliers). Questions to ask yourself when writing this section:
-- _If a dataset is present for this problem, have you thoroughly discussed certain features about the dataset? Has a data sample been provided to the reader?_
-- _If a dataset is present for this problem, are statistics about the dataset calculated and reported? Have any relevant results from this calculation been discussed?_
-- _If a dataset is **not** present for this problem, has discussion been made about the input space or input data for your problem?_
-- _Are there any abnormalities or characteristics about the input space or dataset that need to be addressed? (categorical variables, missing values, outliers, etc.)_
+Midi files are very simple and have been around for a long time. They are functionally like sheet music for software synthesizers (or could even with a midi interface be fed into hardware synthesizers). As they take up much less space than mp3 files they were a popular means of sharing music and embedding music in websites earlier in the internet's history. Tragically, with the cracking down on copyright violations and the rise of easy access to music on youtube and spotify, midi files have become harder to track down. Regardless, midi file collections remain one of the most convenient ways of quickly accessing large amounts of musical information with which to train models.
+
+For this I propose using [this collection](https://www.reddit.com/r/WeAreTheMusicMakers/comments/3ajwe4/the_largest_midi_collection_on_the_internet/), though the code makes no assumption about which selection of midi files are being used. Simply drop midi files in the data directory and the code will crawl through and ingest any valid midi file it finds.
+
+Midi files contain a collection of _tracks_, each track contains a sequence of midi _messages_. The midi file can contain metadata that applies to all the tracks such as tempo and key signature and time signature. Each message is the same kinds of midi messages that are passed between midi devices - information about notes being pressed, pitch bends, control changes and so on. For our purposes, we only look at note on and note off messages, combining the corresponding on and offs into note events. Each such note event has the following features:
+
+- Start time
+- End time
+- Velocity
+- Pitch (which we convert into two features - octave and note)
+
+We also engineer an additional feature called measure position, which is the start time in terms of how long after the start of the measure it finds itself in. For example, if the song is in 4/4 time and the start time corresponds to the 6th quarter note in the song, then the measure position will be 2. Note that start time and end time is actually in ticks, not seconds, as is customary with midi applications. How many ticks are in a beat is also specified in the midi file.
+
+In order to shorten training time, I zeroed in on a subset of the collection that focuses on rock hits one might find on the radio, to be found in the `data/Metal_Rock_rock.freemidis.net_MIDIRip` subfolder. Even with that restriction, it is still a hefty amount of data and still presents a challenge when trying to see the outcome of different tweaks being made. In the optimization step, I'd sometimes temporarily work with 100 or 1000-sized chunks of the data.
 
 ### Exploratory Visualization
+
+![silhouette scores](img/silhouette_scores.png "Silhouette Scores")
+![note distribution](img/note_distribution.png "Note Distribution in Cluster Centers")
+
 In this section, you will need to provide some form of visualization that summarizes or extracts a relevant characteristic or feature about the data. The visualization should adequately support the data being used. Discuss why this visualization was chosen and how it is relevant. Questions to ask yourself when writing this section:
 - _Have you visualized a relevant characteristic or feature about the dataset or input data?_
 - _Is the visualization thoroughly analyzed and discussed?_
 - _If a plot is provided, are the axes, title, and datum clearly defined?_
 
 ### Algorithms and Techniques
+Broadly speaking, I propose two models used in concert with each other in order to predict new notes. One, a clustering algorithm that clusters all melodies based on the relative frequencies of the 12 chromatic notes. Two, a supervised learning algorithm that predicts the next note based on its location, the cluster placement of the melody it's in, the beat (placement in time in the measure it's in) and the previous n notes (to be tuned) in the melody. The clusters likely would correspond to different modes and keys.
+
+For clustering, we propose k means as a good way to determine key and mode. Such information can also be found in the key signature in the midi file, but it is not guaranteed to be present or accurate in a valid midi file. For classifying next note from previous notes, we propose using a linear support vector machine. It is a good algorithm for preventing overfitting and isn't too algorithmically complex for the huge dataset we're dealing with.
+
 In this section, you will need to discuss the algorithms and techniques you intend to use for solving the problem. You should justify the use of each one based on the characteristics of the problem and the problem domain. Questions to ask yourself when writing this section:
 - _Are the algorithms you will use, including any default variables/parameters in the project clearly defined?_
 - _Are the techniques to be used thoroughly discussed and justified?_
 - _Is it made clear how the input data or datasets will be handled by the algorithms and techniques chosen?_
 
 ### Benchmark
-In this section, you will need to provide a clearly defined benchmark result or threshold for comparing across performances obtained by your solution. The reasoning behind the benchmark (in the case where it is not an established result) should be discussed. Questions to ask yourself when writing this section:
-- _Has some result or value been provided that acts as a benchmark for measuring performance?_
-- _Is it clear how this result or value was obtained (whether by data or by hypothesis)?_
+I will select a few monophonic tracks from compositions for which the key and mode are known. Then generate a few measures of quarter notes at random, based on probability, based on the probabilities of the existing notes. Then do the same for the model we built. Then compare the results. See if the crude probabilistic generator is any worse at guessing the next note or any worse at generating good sounding melodies. This simple random generation is often build into instruments and music software, such as in arpeggiators and does a good enough job for many musicians' needs. But hopefully we can do a lot better.
 
 
 ## III. Methodology
-_(approx. 3-5 pages)_
 
 ### Data Preprocessing
+(Talk about how we turn the sequence of notes into arrays of floating point values)
+
 In this section, all of your preprocessing steps will need to be clearly documented, if any were necessary. From the previous section, any of the abnormalities or characteristics that you identified about the dataset will be addressed and corrected here. Questions to ask yourself when writing this section:
 - _If the algorithms chosen require preprocessing steps like feature selection or feature transformations, have they been properly documented?_
 - _Based on the **Data Exploration** section, if there were abnormalities or characteristics that needed to be addressed, have they been properly corrected?_
@@ -77,7 +93,6 @@ In this section, you will need to discuss the process of improvement you made up
 
 
 ## IV. Results
-_(approx. 2-3 pages)_
 
 ### Model Evaluation and Validation
 In this section, the final model and any supporting qualities should be evaluated in detail. It should be clear how the final model was derived and why this model was chosen. In addition, some type of analysis should be used to validate the robustness of this model and its solution, such as manipulating the input data or environment to see how the model’s solution is affected (this is called sensitivity analysis). Questions to ask yourself when writing this section:
@@ -94,7 +109,6 @@ In this section, your model’s final solution and its results should be compare
 
 
 ## V. Conclusion
-_(approx. 1-2 pages)_
 
 ### Free-Form Visualization
 In this section, you will need to provide some form of visualization that emphasizes an important quality about the project. It is much more free-form, but should reasonably support a significant result or characteristic about the problem that you want to discuss. Questions to ask yourself when writing this section:
