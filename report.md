@@ -113,40 +113,29 @@ The number of previous notes to look at gives the model more data to consider in
 
 The number of cluster centers is important as this influences the quality of the classifier, which provides one of the values used by the SVM model. Too few clusters and songs in different modes are spuriously classified together, too many and we're unduly ignoring commonalities. I looped through different values for that and graphed the graph distinctiveness in the exploratory visualizations section.
 
-
 ## IV. Results
 
 ### Model Evaluation and Validation
+The general pattern I see in playing around with parameters is the more data I look at, the higher the previous notes number needs to be. That is not very promising, because even if the scores on the test data climb up with higher values, I still intuitively feel like looking back more than a few notes is going to be overfitting. Then again, it could be that different songs reuse melodies from other songs more than I realize.
 
+Regardless, the scores I get even with higher values for this parameter than I'm comfortable with are poor, and they're poorer than the score on the benchmark model. That leads me to think that, unless a drastic improvement is gotten by suggestions I make in the final section, improvement, this model isn't a good candidate for detecting bad notes or generating novel sequences.
 
-In this section, the final model and any supporting qualities should be evaluated in detail. It should be clear how the final model was derived and why this model was chosen. In addition, some type of analysis should be used to validate the robustness of this model and its solution, such as manipulating the input data or environment to see how the model’s solution is affected (this is called sensitivity analysis). Questions to ask yourself when writing this section:
-- _Is the final model reasonable and aligning with solution expectations? Are the final parameters of the model appropriate?_
-- _Has the final model been tested with various inputs to evaluate whether the model generalizes well to unseen data?_
-- _Is the model robust enough for the problem? Do small perturbations (changes) in training data or the input space greatly affect the results?_
-- _Can results found from the model be trusted?_
+The model does better than chance (which would be `1 / 12` or `.08`) but top out at less than `0.28`, worse than the educated chance of the probabilistic model. Since the probabilistic model is so simple and easy to implement in any language (no need for sklearn), I'd be inclined to choose that model for production even if the SVM did a little better. It needs to do _a lot_ better, and it simply isn't based on the scope of this exploration.
 
 ### Justification
-In this section, your model’s final solution and its results should be compared to the benchmark you established earlier in the project using some type of statistical analysis. You should also justify whether these results and the solution are significant enough to have solved the problem posed in the project. Questions to ask yourself when writing this section:
-- _Are the final results found stronger than the benchmark result reported earlier?_
-- _Have you thoroughly analyzed and discussed the final solution?_
-- _Is the final solution significant enough to have solved the problem?_
-
+The solution does better than random chance so it does give us some information, but since it doesn't do as well as the benchmark probabilistic model, it's simply not worth the trouble unless the improvements I outline in the final section are sufficient to give it a massive boost in performance. This could be because previous notes, current key and placement in measure aren't sufficient. It could also be because there were possible techniques to improve the performance of the algorithm I was unaware of. Either way, as the code currently stands, it is not good enough for production use.
 
 ## V. Conclusion
 
 ### Free-Form Visualization
+Here we see the performance of the model with different values of previous notes. As we can see, increasing the value does increase the score, but it never gets as good as the benchmark model.
+
 ![note predictor performance](img/note_predictor_performance.png "Note Predictor Performance")
-In this section, you will need to provide some form of visualization that emphasizes an important quality about the project. It is much more free-form, but should reasonably support a significant result or characteristic about the problem that you want to discuss. Questions to ask yourself when writing this section:
-- _Have you visualized a relevant or important quality about the problem, dataset, input data, or results?_
-- _Is the visualization thoroughly analyzed and discussed?_
-- _If a plot is provided, are the axes, title, and datum clearly defined?_
 
 ### Reflection
-In this section, you will summarize the entire end-to-end problem solution and discuss one or two particular aspects of the project you found interesting or difficult. You are expected to reflect on the project as a whole to show that you have a firm understanding of the entire process employed in your work. Questions to ask yourself when writing this section:
-- _Have you thoroughly summarized the entire process you used for this project?_
-- _Were there any interesting aspects of the project?_
-- _Were there any difficult aspects of the project?_
-- _Does the final model and solution fit your expectations for the problem, and should it be used in a general setting to solve these types of problems?_
+While I'm calling this specific approach a negative result as it fails to clear the performance of the benchmark model, I believe the components such as the midi pre-processing and the benchmark model provide a good starting point for evaluating other potential models for predicting notes (and thereby detecting bad notes and generating novel sequences). Writing code that processes midi is rather easy and I've done it many, many times before. But the classes found in the exploratory jupyter notebook make an easy starting point for further exploration without having to go through the tedium of parsing and converting data.
+
+The unsupervised model, however, did seem to do a pretty good job without having to rely on complex music theory code. And that is something that can be useful and it's a machine learning technique that isn't so difficult to port to languages that don't already have a lib providing it. Indeed, detecting key and generating random notes in that key as the benchmark model does would be good enough for an arpeggiator built-in to a synthesizer or DAW (digital audio workstation). Often, simple is better.
 
 ### Improvement
 Several potential areas of improvement present themselves:
