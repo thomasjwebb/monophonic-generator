@@ -45,56 +45,80 @@ We also engineer an additional feature called measure position, which is the sta
 
 In order to shorten training time, I zeroed in on a subset of the collection that focuses on rock hits one might find on the radio, to be found in the `data/Metal_Rock_rock.freemidis.net_MIDIRip` subfolder. Even with that restriction, it is still a hefty amount of data and still presents a challenge when trying to see the outcome of different tweaks being made. In the optimization step, I'd sometimes temporarily work with 100 or 1000-sized chunks of the data.
 
+Drum tracks also must be excluded from the final report as they have a strong potential to throw off the data. Even though actual drums can be tuned to be in key, midi information for drums simply maps the notes to different drums, meaning they contain no actual melodic content. I looked at the names of the tracks (metadata that can be any arbitrary ascii string) and make sure to exclude tracks that contain the string "drum", case insensitive. However, as it's the job of the person composing the midi file to put accurate names on the tracks, this isn't a guarantee that there aren't actual drum tracks being processed as though they contained melodic data.
+
 ### Exploratory Visualization
 
+The first step in giving the predictor data to work with is classifying the note sequences based on the relative frequencies of the different notes found in the piece. This is a crude way of hopefully getting at different keys and modes without having to code complicated music theory routines. For this, I used K Means clustering and the silhouette score to score the distinctiveness of the clusters. The highest silhouette score I achieved was by using 13 clusters but as you can see even then the score isn't very high. This doesn't mean that there are only 10 combinations of key and mode of course, but could simply reflect the data or the limitations of this technique.
+
 ![silhouette scores](img/silhouette_scores.png "Silhouette Scores")
+
+A good way to visualize the quality of this technique is to look at the frequencies of the notes in the cluster centers. Do they look like recognizable keys and modes? If there is a peak at one note and you assume that's the root note, there should be another peak a fifth or seven semitones away (for example, the main peak at C should also have a smaller peak at G). There should also be a peak either 3 or 4 semitones away, depending on if it's minor or major, respectively. There are other modes but this pattern should at least be seen in most of the cluster centers. Looking at the teal line with a peak at C, we can see it also has a peak at E and G, as well as A# (the diminished 7th). So this corresponds to a C major scale, very common in nursery rhymes. The red line stands out with a peak at D, and smaller peaks at F, G and A. This looks like a D minor scale. Knowing this pattern, you can intuitively see that this looks like a bunch of different recognizable scales. Despite the silhouette score being poor, I'd say that this method at least correctly detected recognizable patterns I'd expect to see in the data.
+
 ![note distribution](img/note_distribution.png "Note Distribution in Cluster Centers")
 
-In this section, you will need to provide some form of visualization that summarizes or extracts a relevant characteristic or feature about the data. The visualization should adequately support the data being used. Discuss why this visualization was chosen and how it is relevant. Questions to ask yourself when writing this section:
-- _Have you visualized a relevant characteristic or feature about the dataset or input data?_
-- _Is the visualization thoroughly analyzed and discussed?_
-- _If a plot is provided, are the axes, title, and datum clearly defined?_
-
 ### Algorithms and Techniques
-Broadly speaking, I propose two models used in concert with each other in order to predict new notes. One, a clustering algorithm that clusters all melodies based on the relative frequencies of the 12 chromatic notes. Two, a supervised learning algorithm that predicts the next note based on its location, the cluster placement of the melody it's in, the beat (placement in time in the measure it's in) and the previous n notes (to be tuned) in the melody. The clusters likely would correspond to different modes and keys.
+I propose two models used in concert with each other in order to predict new notes. One, a clustering algorithm that clusters all melodies based on the relative frequencies of the 12 chromatic notes. Two, a supervised learning algorithm that predicts the next note based on its location, the cluster placement of the melody it's in, the beat (placement in time in the measure it's in) and the previous n notes (to be tuned) in the melody. The clusters likely would correspond to different modes and keys.
 
 For clustering, we propose k means as a good way to determine key and mode. Such information can also be found in the key signature in the midi file, but it is not guaranteed to be present or accurate in a valid midi file. For classifying next note from previous notes, we propose using a linear support vector machine. It is a good algorithm for preventing overfitting and isn't too algorithmically complex for the huge dataset we're dealing with.
 
-In this section, you will need to discuss the algorithms and techniques you intend to use for solving the problem. You should justify the use of each one based on the characteristics of the problem and the problem domain. Questions to ask yourself when writing this section:
-- _Are the algorithms you will use, including any default variables/parameters in the project clearly defined?_
-- _Are the techniques to be used thoroughly discussed and justified?_
-- _Is it made clear how the input data or datasets will be handled by the algorithms and techniques chosen?_
+We can tune the SVM  by changing how many previous notes to look at, with the dimensionality being n+2. Higher number of previous notes gives the model more data to work with but also potentially could lead to overfitting (if you know a note from the previous 60 notes, you may simply be remembering a specific melody in a specific song). The clustering algorithm can be tuned by adjusting the number of clusters. In the previous exploration section, 10 appeared to be the optimal number of clusters, based on cluster distinctiveness.
 
 ### Benchmark
-I will select a few monophonic tracks from compositions for which the key and mode are known. Then generate a few measures of quarter notes at random, based on probability, based on the probabilities of the existing notes. Then do the same for the model we built. Then compare the results. See if the crude probabilistic generator is any worse at guessing the next note or any worse at generating good sounding melodies. This simple random generation is often build into instruments and music software, such as in arpeggiators and does a good enough job for many musicians' needs. But hopefully we can do a lot better.
+The benchmark model, which we hope to exceed in predictive quality, will be a simply probabilistic model. Get the probabilities of all the previous notes in a sequence and pick randomly based on that. For example, if there have been four notes already, A A C C, then pick A with a probability of 50% or C with a probability of 50%. Subsequent notes are picked in this manner but always based on the real previous notes, not the guesses.
+
+We can then create a score based on these guesses and compare it to the scores of the final SVM model, comparing different values for previous notes to consider.
 
 
 ## III. Methodology
 
 ### Data Preprocessing
-(Talk about how we turn the sequence of notes into arrays of floating point values)
+Data from out in the wild can be pretty wild. There are inconsistencies and as these aren't official but often made by music fans, they aren't necessarily accurate. The hope is that with a large enough quantity from a good collection, errors can be smoothed out. Polyphony is also a very complex thing and difficult to deal with without employing a lot of music theory like other approaches already tend to use. I wish to focus here just on monophonic sequences. All the valid musical sequences are used to train the clustering algorithm since only the note frequency data is used for that anyway. But the supervised learning will only be done on monophonic melodies. By only focusing on monophonic melodies, I can make some simplifying assumptions. The notes are sequences of values with features (note, octave, start and end positions). We also ignore any tracks that are labelled as drum track to hopefully avoid tracks without melodic content.
 
-In this section, all of your preprocessing steps will need to be clearly documented, if any were necessary. From the previous section, any of the abnormalities or characteristics that you identified about the dataset will be addressed and corrected here. Questions to ask yourself when writing this section:
-- _If the algorithms chosen require preprocessing steps like feature selection or feature transformations, have they been properly documented?_
-- _Based on the **Data Exploration** section, if there were abnormalities or characteristics that needed to be addressed, have they been properly corrected?_
-- _If no preprocessing is needed, has it been made clear why?_
+Before checking if melodies are monophonic or not and to be included in that set of data, I will quantize to some arbitrary precision. This reduces the dimensionality of the problem, though it will end up disqualifying many sequences from consideration (two 16th notes in a row will be quantized to the same position, making the sequence polyphonic even if it started out as monophonic). Now each note has an attribute of start position within the measure that is one of only x possibilities, with x being the precision. I'll start with 8th notes as that seems to strike a good balance.
+
+Then for each monophonic sequences, I'll create an array of labels and data. The data is n+2 dimension, with n being the number of prior notes to look at:
+
+1. The cluster classification of the sequences as a whole
+2. The start position of the note in the measure it starts in (so 0-7 if we decided to quantize to 8th notes)
+3. The previous n notes (note only, no octave, so 0-11)
+
+The labels then are the note that followed those notes, one of 12 possible values. This means that we don't predict octave or rhythm. The techniques I'm using can easily be extended to include other variables, but I think it can be potentially more useful without that complexity and let the timing be dictated by user input or the much simpler music theory that governs rhythm.
+
+To give one example to demonstrate the shape the data takes, imagine a note C3 that starts a 16th note after the beginning of the measure and followed two G2s in a row, where a previous notes value of 2 was chosen. Quantizing will push it to the beginning of the measure. Assuming the classifier assigned a cluster of id 3, we will have:
+
+`[3, 0, 7, 7]`
+
+These values are then normalized into floating point values due to the model's sensitivity to fluctuations in values.
 
 ### Implementation
-In this section, the process for which metrics, algorithms, and techniques that you implemented for the given data will need to be clearly documented. It should be abundantly clear how the implementation was carried out, and discussion should be made regarding any complications that occurred during this process. Questions to ask yourself when writing this section:
-- _Is it made clear how the algorithms and techniques were implemented with the given datasets or input data?_
-- _Were there any complications with the original metrics or techniques that required changing prior to acquiring a solution?_
-- _Was there any part of the coding process (e.g., writing complicated functions) that should be documented?_
+First I train a K Means classifier on all melodic data, whether or not it is monophonic. I base the number of clusters on experimenting with which amount produces the most distinct clusters. Then I train an svm on this data, then evaluate it and benchmark it. Then I'll test to see if this does any better than the probabilistic model mentioned in the benchmark section.
+
+I can tweak the parameters by hand to get better results, but it's also possible to loop through a range of possibilities in order to optimize the output. For example, I can select the best cluster number for the first classifier as [described here](https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html). The graph in the exploratory visualizations section shows the outcome of this.
+
+One of the biggest challenges with implementation is the turnaround time required to see how different tunable parameters affect the performance. It wasn't a real problem with K Means, which has a shorter training time, but was with the SVM model. To get around that, I worked with smaller subsets of the data, but even with smaller subsets, it was still time consumer. This shows the real practical importance of algorithms with better computational efficiency.
+
+The positive from the implementation is now I have classes that quickly turn midi input data into forms easily digestible by machine learning algorithms. Regardless of the utility of the final model, that part of the code can save work for future explorations.
 
 ### Refinement
-In this section, you will need to discuss the process of improvement you made upon the algorithms and techniques you used in your implementation. For example, adjusting parameters for certain models to acquire improved solutions would fall under the refinement category. Your initial and final solutions should be reported, as well as any significant intermediate results as necessary. Questions to ask yourself when writing this section:
-- _Has an initial solution been found and clearly reported?_
-- _Is the process of improvement clearly documented, such as what techniques were used?_
-- _Are intermediate and final solutions clearly reported as the process is improved?_
+The following parameters can be tuned to affect the final results:
+
+* Quantization precision to apply
+* Number of previous notes to look at when training the supervised model (SVM)
+* Number of cluster centers for the unsupervised classification model (K Means)
+
+Quantization is a balancing act between several different concerns. Quantizing to lower precision means discarding more data and by pushing multiple notes that didn't overlap into overlapping, potentially discarding much more data as polyphonic sequences are left out of the training for the model. Quantizing to higher precision can increase the dimensionality of the data. I went with quantizing to eight notes.
+
+The number of previous notes to look at gives the model more data to consider in making predictions but can lead to overfitting if the value is too high. I looped through different values for this parameter and comparing the scores. See the visualization in the conclusion section.
+
+The number of cluster centers is important as this influences the quality of the classifier, which provides one of the values used by the SVM model. Too few clusters and songs in different modes are spuriously classified together, too many and we're unduly ignoring commonalities. I looped through different values for that and graphed the graph distinctiveness in the exploratory visualizations section.
 
 
 ## IV. Results
 
 ### Model Evaluation and Validation
+
+
 In this section, the final model and any supporting qualities should be evaluated in detail. It should be clear how the final model was derived and why this model was chosen. In addition, some type of analysis should be used to validate the robustness of this model and its solution, such as manipulating the input data or environment to see how the model’s solution is affected (this is called sensitivity analysis). Questions to ask yourself when writing this section:
 - _Is the final model reasonable and aligning with solution expectations? Are the final parameters of the model appropriate?_
 - _Has the final model been tested with various inputs to evaluate whether the model generalizes well to unseen data?_
@@ -111,6 +135,7 @@ In this section, your model’s final solution and its results should be compare
 ## V. Conclusion
 
 ### Free-Form Visualization
+![note predictor performance](img/note_predictor_performance.png "Note Predictor Performance")
 In this section, you will need to provide some form of visualization that emphasizes an important quality about the project. It is much more free-form, but should reasonably support a significant result or characteristic about the problem that you want to discuss. Questions to ask yourself when writing this section:
 - _Have you visualized a relevant or important quality about the problem, dataset, input data, or results?_
 - _Is the visualization thoroughly analyzed and discussed?_
@@ -124,19 +149,15 @@ In this section, you will summarize the entire end-to-end problem solution and d
 - _Does the final model and solution fit your expectations for the problem, and should it be used in a general setting to solve these types of problems?_
 
 ### Improvement
-In this section, you will need to provide discussion as to how one aspect of the implementation you designed could be improved. As an example, consider ways your implementation can be made more general, and what would need to be modified. You do not need to make this improvement, but the potential solutions resulting from these changes are considered and compared/contrasted to your current solution. Questions to ask yourself when writing this section:
-- _Are there further improvements that could be made on the algorithms or techniques you used in this project?_
-- _Were there algorithms or techniques you researched that you did not know how to implement, but would consider using if you knew how?_
-- _If you used your final solution as the new benchmark, do you think an even better solution exists?_
+Several potential areas of improvement present themselves:
 
------------
+__Quantization__
+Currently, the model quantizes the notes first, then excludes tracks where any notes overlap from the final supervised model. This approach can be refined in order to improve the quality of the "position in measure" metric. It doesn't actually make sense to classify something a 16th note after the beginning of the measure as being on the on beat. If one wants to improve this technique, it would be worth discarding all notes that aren't sufficiently close to the quantization grid instead of moving them. This would allow many more tracks to be included as even some polyphonic tracks could even become monophonic, whereas the current algorithm is more likely to do the opposite.
 
-**Before submitting, ask yourself. . .**
+__More Data__
+What I lacked was time rather than data. By only looking at a subset of the wonderous collection of midi files I found, I may have missed out on a good antidote to overfitting, more data. If I'm not pressed for time, I could have a computer set to just work on training on all the available data, perhaps even over a range of one or two tunable parameters. By doing that, it may be possible to bring this from an unsatisfactory model to a good one.
 
-- Does the project report you’ve written follow a well-organized structure similar to that of the project template?
-- Is each section (particularly **Analysis** and **Methodology**) written in a clear, concise and specific fashion? Are there any ambiguous terms or phrases that need clarification?
-- Would the intended audience of your project be able to understand your analysis, methods, and results?
-- Have you properly proof-read your project report to assure there are minimal grammatical and spelling mistakes?
-- Are all the resources used for this project correctly cited and referenced?
-- Is the code that implements your solution easily readable and properly commented?
-- Does the code execute without error and produce results similar to those reported?
+__Cleaner Data__
+Conversely, quality may matter more than quantity, if there are quality issues with the data. Ensuring that every single drum track is properly labelled as a drum track can help a lot. Also, curating a subset of the data that has accurate key signature data can be a good source to train a supervised model to detect modes with better accuracy than our unsupervised approach. Since many of the files do in fact have this data, I may be missing out by ignoring it completely.
+
+Lastly, having someone listen to the files using a midi player can help identify and remove or fix any files for which the data is simply inaccurate. Since these files aren't from official sources but made by fans, it can have the same kinds of inaccuracies that, for example, guitar tabs on the internet might have. Removing inaccurate data can certainly improve the quality of the model, although the errors tend to be musical so it might not make the biggest difference.
