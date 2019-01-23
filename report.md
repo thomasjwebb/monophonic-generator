@@ -20,12 +20,18 @@ Predicting novel sequences from an existing sequence of notes serves two major p
 
 Since music is, like all art forms, intended to surprise and not simply be a repeat of rigid rules, some wiggle room should be allowed for accidentals and the most likely note shouldn't allways be the note that is selected in generation. An objective evaluation of whether the model does well enough on the test set can demonstrate that the model is learning _something_ that can be applies, while this analysis should ultimately be coupled with a subjective listening of computer-generated sequences.
 
-Here we are treating this as a classification problem. By removing octave information from the equation, we are using environment data, including the recent history of notes to predict the next note. Additionally, we also treat the key and mode as a classification problem as well and use that input as part of the environment for the other classification problem, predicting the next note.
+Here we are treating this as a classification problem. By removing octave information from the equation, we are using environment data, including the recent history of notes to predict the next note. Additionally, we also treat the key and mode as a classification problem as well and use that input as part of the environment for the supervised learning problem, predicting the next note.
+
+The strategy I propose is breaking it down into two parts. First, perform preprocessing to make the data usable by machine learning algorithms, ensure consistency, and remove data that isn't relevant. Second, perform an unsupervised learning algorithm on all of the tracks with melodic content in order to be able to classify tracks by their key and mode. Secondly, use that classification, the placement of the note within the measure it's in and a tunable number of previous notes as the dimensions of the label for a supervised learning technique.
 
 ### Metrics
 Ultimately the best metric for evaluating these methods would be subjective. Have a number of musically-inclined people judge the output of the algorithm, whether corrected sequences or sequences with new notes added programmatically, based on how musically pleasing it is. However, that is beyond the scope of this since it requires a statistically appropriately large number of humans making these judgments. Before we can get to the point where it's worth doing such tests, it should clear a more objective test of accuracy first.
 
 To this end, I split the data into a training set and a test set, and score based on how many predictions are correct. This output by itself doesn't tell us enough, however. It's simply a number between 0 and 1. A good baseline would be the simpler to implement benchmark, which is a function that guesses the following note by simply selecting a random note based on the distribution of probabilities in the composition. In other words, our model needs to do _better than chance_, with an educated understanding of the chance. Given the additional overhead of training a model, it should ideally do _significantly_ better than this benchmark to be worth the trouble.
+
+The metric used to score both the SVM and the benchmark probabilistic model is mean accuracy. The notes are not treated as numerical, so there is no such thing as more or less wrong, only the one correct answer and the rest being incorrect. The basic formula is:
+
+$score = \frac{number of correct predictions}{total number of predictions made}$  
 
 ## II. Analysis
 
@@ -62,13 +68,18 @@ I propose two models used in concert with each other in order to predict new not
 
 For clustering, we propose k means as a good way to determine key and mode. Such information can also be found in the key signature in the midi file, but it is not guaranteed to be present or accurate in a valid midi file. For classifying next note from previous notes, we propose using a linear support vector machine. It is a good algorithm for preventing overfitting and isn't too algorithmically complex for the huge dataset we're dealing with.
 
-We can tune the SVM  by changing how many previous notes to look at, with the dimensionality being n+2. Higher number of previous notes gives the model more data to work with but also potentially could lead to overfitting (if you know a note from the previous 60 notes, you may simply be remembering a specific melody in a specific song). The clustering algorithm can be tuned by adjusting the number of clusters. In the previous exploration section, 10 appeared to be the optimal number of clusters, based on cluster distinctiveness.
+K Means creates a number of centroids, chosen at the start, placed randomly in the n-dimensional space, depending on the number of features. In our case, 12. Then all the points are assigned to a centroid based on the distance, then the centroids are pushed to the center of the points assigned to it. This is repeated until the centroids stop moving much or a preconfigured number of iterations has been reached. After this has run, we will hopefully have a number of centroids that represent something meaningful, key and mode combinations.
+
+SVMs are a supervised learning algorithm that divides data into classes, by placing hyperplanes between them in n-dimensional space. Then the hyperplanes are moved until their margins to the data points are increased as much as possible or until the max number of generations is reached. To accomodate data that isn't linearly separable, a kernel is used that transforms the data into a higher dimension so that it is linearly separable. The flexibility in being able to use different kinds of kernels allows classifying data that isn't linearly separable or also choosing based on computational efficiency.
+
+In our case, the large amount of data is difficult to accomodate with non-linear kernels so LinearSVC is used. The potentially large number of features (if a high number of previous notes are used) means SVMs are a good choice since they are less prone to over-fitting than other models.
+
+We can tune the SVM by changing how many previous notes to look at, with the dimensionality being n+2. Higher number of previous notes gives the model more data to work with but also potentially could lead to overfitting (if you know a note from the previous 60 notes, you may simply be remembering a specific melody in a specific song). The clustering algorithm can be tuned by adjusting the number of clusters. In the previous exploration section, 10 appeared to be the optimal number of clusters, based on cluster distinctiveness.
 
 ### Benchmark
 The benchmark model, which we hope to exceed in predictive quality, will be a simply probabilistic model. Get the probabilities of all the previous notes in a sequence and pick randomly based on that. For example, if there have been four notes already, A A C C, then pick A with a probability of 50% or C with a probability of 50%. Subsequent notes are picked in this manner but always based on the real previous notes, not the guesses.
 
 We can then create a score based on these guesses and compare it to the scores of the final SVM model, comparing different values for previous notes to consider.
-
 
 ## III. Methodology
 
@@ -106,12 +117,15 @@ The following parameters can be tuned to affect the final results:
 * Quantization precision to apply
 * Number of previous notes to look at when training the supervised model (SVM)
 * Number of cluster centers for the unsupervised classification model (K Means)
+* SVM class weight
 
 Quantization is a balancing act between several different concerns. Quantizing to lower precision means discarding more data and by pushing multiple notes that didn't overlap into overlapping, potentially discarding much more data as polyphonic sequences are left out of the training for the model. Quantizing to higher precision can increase the dimensionality of the data. I went with quantizing to eight notes.
 
 The number of previous notes to look at gives the model more data to consider in making predictions but can lead to overfitting if the value is too high. I looped through different values for this parameter and comparing the scores. See the visualization in the conclusion section.
 
 The number of cluster centers is important as this influences the quality of the classifier, which provides one of the values used by the SVM model. Too few clusters and songs in different modes are spuriously classified together, too many and we're unduly ignoring commonalities. I looped through different values for that and graphed the graph distinctiveness in the exploratory visualizations section.
+
+The SVM itself can be adjusted in a number of ways. The class weight is one that appears most relevant to this application. By default, we're giving the model an undifferentiated sequence of floating point features. However, we could give the cluster assignment (key/mode) value additional weight, given how much information that one feature really gives us, compared to the previous note features. Conversely, using balanced mode can tell the algorithm to give a value more weight, the rarer it is.
 
 ## IV. Results
 
@@ -128,7 +142,7 @@ The solution does better than random chance so it does give us some information,
 ## V. Conclusion
 
 ### Free-Form Visualization
-Here we see the performance of the model with different values of previous notes. As we can see, increasing the value does increase the score, but it never gets as good as the benchmark model.
+Here we see the performance of the model with different values of previous notes. As we can see, increasing the value does increase the score, but even with sky-high number of features, it is still low. If the score is to be trusted, then the point of overfitting hasn't been reached.
 
 ![note predictor performance](img/note_predictor_performance.png "Note Predictor Performance")
 
